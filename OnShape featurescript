@@ -1,0 +1,612 @@
+THIS CODE WAS NOT WRITTEN BY ME!!! It was made by this guy: https://forum.onshape.com/profile/maximilian_schommer. I simply copied the code on the off chance it was taken down.
+FeatureScript 701;
+import(path : "onshape/std/geometry.fs", version : "701.0");
+icon::import(path : "8dc07dc0f5ba0a52342f0f66", version : "681bcccfae6377be3ce70edc");
+
+annotation { "Feature Type Name" : "Cycloidal Drive", "Editing Logic Function" : "editCycloidalGearLogic" , "Icon": icon::BLOB_DATA}
+export const cycloid = defineFeature(function(context is Context, id is Id, definition is map)
+    precondition
+    {
+        annotation { "Name" : "Circle Diameter" }
+        isLength(definition.circleDiameter, CIRCLE_DIAM_BOUNDS);
+
+        annotation { "Name" : "Tooth Number" }
+        isInteger(definition.n, BASE_TEETH_BOUNDS);
+        
+        annotation { "Name" : "Cycloidal Modulus" }
+        isReal(definition.cyMod, CYMOD_BOUNDS);
+
+        annotation { "Name" : "Eccentricity" }
+        isLength(definition.eC, ECCENTRICITY_BOUNDS);
+
+        annotation { "Name" : "Create Outer Pin Bodies" }
+        definition.outBodies is boolean;
+        
+        annotation { "Name" : "Outer Pin Diameter" }
+        isLength(definition.outerPinDiam, OUTER_PIN_DIAM_BOUNDS);
+        
+        annotation { "Name" : "Create Inner Pin Bodies" }
+        definition.inBodies is boolean;
+        
+        annotation { "Name" : "Inner Pin Count" }
+        isInteger(definition.pinCount, INNER_PIN_COUNT_BOUNDS);
+
+        annotation { "Name" : "Inner Pin Diameter" }
+        isLength(definition.innerPinDiam, INNER_PIN_DIAM_BOUNDS);
+        
+        annotation { "Name" : "Inner Pin Radius from Center" }
+        isLength(definition.innerCentRad,INNER_PIN_CENTRAL_RADIUS_BOUNDS);
+        
+        annotation {"Name" : "Output Disc Thickness" }
+        isLength(definition.outDiscThick, OUT_DISC_THICK_BOUNDS);
+        
+        annotation { "Name" : "Create Bearing Body" }
+        definition.bearingBody is boolean;
+        
+        annotation { "Name" : "Inner Bearing Diameter" }
+        isLength(definition.innerBearing, INNER_BEARING_BOUNDS);
+
+        annotation { "Name" : "Outer Bearing Diameter" }
+        isLength(definition.outerBearing, OUTER_BEARING_BOUNDS);
+        
+        annotation { "Name" : "Create Shaft Input Body" }
+        definition.shaftBody is boolean;
+        
+        annotation { "Name" : "Input Shaft Diameter" }
+        isLength(definition.shaftD, SHAFT_BOUNDS);
+
+        annotation { "Name" : "Thickness of Gear" }
+        isLength(definition.thickness, THICKNESS_BOUNDS);
+
+        annotation { "Name" : "Sketch Origin Point", "Filter" : EntityType.VERTEX, "MaxNumberOfPicks" : 1 }
+        definition.sketchOrigin is Query;
+
+
+    }
+    {
+        var R_1 = definition.circleDiameter / 2; //Radius of inner gear;
+        var n = definition.n; //Teeth number
+        var r_BI = definition.innerBearing / 2; //Inner bearing radius
+        var r_BO = definition.outerBearing / 2; //Outer bearing radius
+        var R_2 = definition.innerCentRad; //Radius of the pin holes center
+        var r_P = definition.innerPinDiam / 2; //Pin Radius
+        var r_TC = definition.outerPinDiam / 2 /* 2 * R_1 * sin(PI / (2 * n) * radian)*/; //Radius of teeth circle.
+        var eC = definition.cyMod / n * meter; //Amount that the motor shaft is offset from the center of the inner gear.
+        var r_PH = eC + r_P; //Radius of the pin hole
+        var i_PC = definition.pinCount; //Inner pin count
+        var r_SH = definition.shaftD / 2; //Input Shaft Radius
+
+        var everything = evaluateQuery(context, qEverything(EntityType.BODY)); //Capture state before feature actions
+
+        centralGear(context, id, {
+                    "R" : R_1,
+                    "n" : n,
+                    "r_BO" : r_BO,
+                    "r_PH" : r_PH,
+                    "r_TC" : r_TC,
+                    "pinCount" : i_PC,
+                    "R_2" : R_2,
+                    "eC" : eC,
+                    "skOrigin" : definition.sketchOrigin,
+                    "thickness" : definition.thickness
+                });
+
+        outerPegs(context, id + "OP", {
+                    "R_main" : R_1,
+                    "R_sec" : r_TC,
+                    "n" : n,
+                    "skOrigin" : definition.sketchOrigin,
+                    "thickness" : definition.thickness,
+                    "outBodies" : definition.outBodies
+                }
+            );
+
+        outputDisc(context, id + "OD", {
+                    "pinCount" : i_PC,
+                    "R_2" : R_2.value,
+                    "r_P" : r_P.value,
+                    "skOrigin" : definition.sketchOrigin,
+                    "thickness" : definition.thickness,
+                    "inBodies" : definition.inBodies,
+                    "outDiscThick" : definition.outDiscThick
+
+                }
+            );
+
+        ballBearing(context, id + "BB", {
+                    "r_BI" : r_BI,
+                    "r_BO" : r_BO,
+                    "eC" : eC.value,
+                    "skOrigin" : definition.sketchOrigin,
+                    "thickness" : definition.thickness,
+                    "bearingBody": definition.bearingBody
+                }
+            );
+
+        inputShaft(context, id + "IS", {
+                    "r_BI" : r_BI,
+                    "eC" : eC.value,
+                    "r_SH" : r_SH,
+                    "skOrigin" : definition.sketchOrigin,
+                    "thickness" : definition.thickness,
+                    "shaftBody" : definition.shaftBody
+                }
+            );
+
+        if (evaluateQuery(context, definition.sketchOrigin) != [])
+        {
+
+            //Transform everything that's been created by this feature
+            performTransform(context, id, {
+                        "entities" : qSubtraction(qUnion(evaluateQuery(context, qEverything(EntityType.BODY))), qUnion(everything)),
+                        "center" : definition.sketchOrigin
+                    });
+
+        }
+    });
+
+
+function performTransform(context is Context, id is Id, definition)
+{
+
+    const newCoordSys = coordSystem(evVertexPoint(context, {
+                    "vertex" : definition.center
+                }), evOwnerSketchPlane(context, {
+                        "entity" : definition.center
+                    }).x, evOwnerSketchPlane(context, {
+                        "entity" : definition.center
+                    }).normal);
+
+
+    const finalTransform = toWorld(newCoordSys);
+
+
+    opTransform(context, id + "transformFinal", {
+                "bodies" : definition.entities,
+                "transform" : finalTransform
+            });
+}
+
+export function inputShaft(context is Context, id is Id, definition is map)
+{
+    var r_BI = definition.r_BI;
+    var eC = definition.eC;
+    var r_SH = definition.r_SH;
+    var thickness = definition.thickness;
+
+    var sketchPlane = qCreatedBy(makeId("Top"), EntityType.FACE);
+
+    var evalPlane = evPlane(context, {
+            "face" : sketchPlane
+        });
+
+    var shaftBase = newSketch(context, id + "sketch1", {
+            "sketchPlane" : sketchPlane
+        });
+    skCircle(shaftBase, "circle2", {
+                "center" : vector(0, eC) * meter,
+                "radius" : r_BI
+            });
+
+    skSolve(shaftBase);
+    if (definition.shaftBody) {
+    opExtrude(context, id + "extrude1", {
+                "entities" : qSketchRegion(id + "sketch1", true),
+                "direction" : evalPlane.normal,
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : thickness
+            });
+
+    var inputShaft = newSketch(context, id + "sketch2", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+        });
+    skCircle(inputShaft, "circle1", {
+                "center" : vector(0, 0) * meter,
+                "radius" : r_SH
+            });
+    skSolve(inputShaft);
+
+    opExtrude(context, id + "extrude2", {
+                "entities" : qSketchRegion(id + "sketch2", true),
+                "direction" : evalPlane.normal,
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : thickness * 2
+            });
+    opBoolean(context, id + "boolean1", {
+                "tools" : qUnion([qCreatedBy(id + "extrude1", EntityType.BODY), qCreatedBy(id + "extrude2", EntityType.BODY)]),
+                "operationType" : BooleanOperationType.UNION
+            });
+    opDeleteBodies(context, id + "deleteBodies1", {
+                "entities" : qUnion([qCreatedBy(id + "sketch1", EntityType.EDGE), qCreatedBy(id + "sketch1", EntityType.VERTEX),
+                            qCreatedBy(id + "sketch2", EntityType.EDGE), qCreatedBy(id + "sketch2", EntityType.VERTEX)])
+            });
+    }
+}
+
+export function ballBearing(context is Context, id is Id, definition is map)
+{
+    var r_BI = definition.r_BI;
+    var r_BO = definition.r_BO;
+    var eC = definition.eC;
+    var thickness = definition.thickness;
+
+    var ballBearing = newSketch(context, id + "sketch1", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+        });
+    skCircle(ballBearing, "circle1", {
+                "center" : vector(0, eC) * meter,
+                "radius" : r_BO
+            });
+    skCircle(ballBearing, "circle2", {
+                "center" : vector(0, eC) * meter,
+                "radius" : r_BI
+            });
+
+    skSolve(ballBearing);
+    if (definition.bearingBody) {
+    opExtrude(context, id + "extrude1", {
+                "entities" : qSketchRegion(id + "sketch1", true),
+                "direction" : vector(0, 0, 1),
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : thickness
+            });
+    }
+    opDeleteBodies(context, id + "deleteBodies1", {
+                "entities" : qUnion([qCreatedBy(id + "sketch1", EntityType.EDGE), qCreatedBy(id + "sketch1", EntityType.VERTEX)])
+            });
+    
+}
+
+
+export function outputDisc(context is Context, id is Id, definition is map)
+{
+    var pinCount = definition.pinCount;
+    var R_2 = definition.R_2;
+    var r_P = definition.r_P;
+    var thickness = definition.thickness;
+
+    var outputDisc = newSketch(context, id + "sketch1", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+        });
+    for (var i = 0; i < pinCount; i += 1)
+    {
+        skCircle(outputDisc, "circle_" ~ i, {
+                    "center" : vector(R_2 * sin(i * 2 * PI / pinCount * radian), R_2 * cos(i * 2 * PI / pinCount * radian)) * meter,
+                    "radius" : r_P * meter
+                });
+    }
+
+    skSolve(outputDisc);
+    if (definition.inBodies){
+    opExtrude(context, id + "extrude1", {
+                "entities" : qSketchRegion(id + "sketch1"),
+                "direction" : vector(0, 0, 1),
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : thickness
+            });
+    
+    var baseDisc = newSketch(context, id + "sketch2", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+        });
+    skCircle(baseDisc, "baseCircle", {
+                "center" : vector(0, 0) * inch,
+                "radius" : (R_2 + r_P) * meter
+            });
+
+    skSolve(baseDisc);
+    opExtrude(context, id + "extrude2", {
+                "entities" : qSketchRegion(id + "sketch2"),
+                "direction" : vector(0, 0, -1),
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : definition.outDiscThick
+            });
+
+    opBoolean(context, id + "boolean1", {
+                "tools" : qUnion([qCreatedBy(id + "extrude1", EntityType.BODY), qCreatedBy(id + "extrude2", EntityType.BODY)]),
+                "operationType" : BooleanOperationType.UNION
+            });
+
+    opDeleteBodies(context, id + "deleteBodies1", {
+                "entities" : qUnion([qCreatedBy(id + "sketch1", EntityType.EDGE), qCreatedBy(id + "sketch1", EntityType.VERTEX),
+                            qCreatedBy(id + "sketch2", EntityType.EDGE), qCreatedBy(id + "sketch2", EntityType.VERTEX)])
+            });
+    }
+
+}
+
+export function outerPegs(context is Context, id is Id, definition is map)
+{
+    var R_main = definition.R_main.value;
+    var R_sec = definition.R_sec;
+    var n = definition.n + 1;
+    var createBodeies = definition.outBodies;
+    
+    var outerPegs = newSketch(context, id + "sketch1", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+        });
+    var isConstruction = false;
+    for (var i = 0; i < n; i += 1)
+    {
+        if (i > 0)
+        {
+            isConstruction = true;
+        }
+
+        skCircle(outerPegs, "circle_" ~ i, {
+                    "center" : vector(R_main * sin((i + 1 / 2) * 2 * PI / n * radian), R_main * cos((i + 1 / 2) * 2 * PI / n * radian)) * meter,
+                    "radius" : R_sec,
+                    "construction" : isConstruction
+                });
+    }
+    skSolve(outerPegs);
+    
+    if (createBodeies)
+    {
+    opExtrude(context, id + "extrude1", {
+                "entities" : qSketchRegion(id + "sketch1"),
+                "direction" : vector(0, 0, 1),
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : definition.thickness
+            });
+}
+
+}
+
+
+function centralGear(context is Context, id is Id, definition is map)
+{
+    var R = definition.R.value;
+    var n = definition.n;
+    var r_BO = definition.r_BO;
+    var r_PH = definition.r_PH;
+    var R_2 = definition.R_2.value;
+    var eC = definition.eC.value;
+    var r_TC = definition.r_TC;
+    var pinCount = definition.pinCount;
+
+    var cycloid = plotCycloid(context, id, {
+            "resolution" : (n) * 20,
+            "R" : R,
+            "eC" : eC,
+            "n" : n
+        }
+    );
+    var cycloidSketch = newSketch(context, id + "sketch_Cycloid", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+        });
+
+    skFitSpline(cycloidSketch, "spline1", {
+                "points" : cycloid
+            });
+    for (var i = 0; i < pinCount; i += 1)
+    {
+        skCircle(cycloidSketch, "circle_" ~ i, {
+                    "center" : vector(R_2 * sin(i * 2 * PI / pinCount * radian), R_2 * cos(i * 2 * PI / pinCount * radian)) * meter,
+                    "radius" : r_PH
+                });
+    }
+
+    skCircle(cycloidSketch, "center_circle", {
+                "center" : vector(0, 0) * meter,
+                "radius" : r_BO
+            });
+    skSolve(cycloidSketch);
+    
+    var pitchCircle = newSketch(context, id + "outerPitch", {
+            "sketchPlane" : qCreatedBy(makeId("Top"), EntityType.FACE)
+    });
+    var pitchRadius = definition.eC*(n+1)/*-.8*inch*/;
+    skCircle(pitchCircle, "circle1", {
+            "center" : vector(0, 0) * inch,
+            "radius" : pitchRadius
+    });
+    skCircle(pitchCircle, "circle2", {
+            "center" : vector(0*inch, definition.eC),
+            "radius" : definition.eC*n
+    });
+    skSolve(pitchCircle);
+    
+    
+    opExtrude(context, id + "extrude_Cycloid", {
+                "entities" : qSketchRegion(id + "sketch_Cycloid", true),
+                "direction" : vector(0, 0, 1),
+                "endBound" : BoundingType.BLIND,
+                "endDepth" : definition.thickness
+            });
+    opOffsetFace(context, id + "offsetFace1", {
+                "moveFaces" : qClosestTo(qSubtraction(qCreatedBy(id + "extrude_Cycloid", EntityType.FACE), qUnion([qCapEntity(id + "extrude_Cycloid", false), qCapEntity(id + "extrude_Cycloid", true)])), vector(0, R + eC, 0) * meter),
+                "offsetDistance" : -r_TC
+            });
+
+    opTransform(context, id + "transform1", {
+                "bodies" : qUnion([qCreatedBy(id + "extrude_Cycloid", EntityType.BODY),]),
+                "transform" : transform(vector(0, eC, 0) * meter)
+            });
+
+    opDeleteBodies(context, id + "deleteBodies1", {
+                "entities" : qUnion([qCreatedBy(id + "sketch_Cycloid", EntityType.EDGE), qCreatedBy(id + "sketch_Cycloid", EntityType.VERTEX)])
+            });
+}
+
+export function plotCycloid(context is Context, id is Id, definition is map)
+{
+    var R = definition.R;
+    var eC = definition.eC;
+    var n = definition.n;
+    var res = definition.resolution;
+    var theta = 0 * radian;
+    var x = 0;
+    var y = 0;
+
+    var points = [];
+
+    for (var i = 0; i < res; i += 1)
+    {
+        theta = (i / res) * 2 * PI * radian;
+
+        y = (R * cos(theta) + eC * cos((n + 1) * theta)) * meter;
+
+        x = (R * sin(theta) + eC * sin((n + 1) * theta)) * meter;
+
+        points = append(points, vector(x, y));
+
+
+    }
+    points = append(points, points[0]);
+    return points;
+}
+
+
+/**
+ * Returns the 2d rotation matrix for a given angle.
+ */
+export function rotationMatrix2d(angle)
+{
+    return [[cos(angle), -sin(angle)], [sin(angle), cos(angle)]] as Matrix;
+}
+
+/**
+ * Returns a (2d) point transformed by rotating an angle around a central point (2d).
+ */
+export function transformAroundPoint(point, center, angle)
+{
+    var newPoint = point - center;
+    var rotMat = rotationMatrix2d(angle);
+    newPoint = rotMat * newPoint;
+    newPoint = newPoint + center;
+    return newPoint;
+}
+
+
+export function editCycloidalGearLogic(context is Context, id is Id, oldDefinition is map, definition is map, isCreating is boolean, specifiedParameters is map, hiddenBodies is Query) returns map
+{
+    if (oldDefinition.eC != definition.eC)
+    {
+        definition.cyMod = (definition.eC.value) * definition.n;
+        return definition;
+    }
+
+    if (oldDefinition.cyMod != definition.cyMod)
+    {
+        definition.eC = definition.cyMod / definition.n * meter;
+        return definition;
+    }
+
+    if (oldDefinition.n != definition.n)
+    {
+        definition.outerPinDiam = oldDefinition.outerPinDiam * oldDefinition.n / definition.n;
+        definition.eC = definition.cyMod / definition.n * meter;
+        return definition;
+    }
+    
+    if (oldDefinition.circleDiameter != definition.circleDiameter)
+    {
+        var scalingFactor = definition.circleDiameter/oldDefinition.circleDiameter;
+        definition.cyMod *= scalingFactor;
+        definition.eC *=scalingFactor;
+        definition.outerPinDiam *= scalingFactor;
+        definition.innerPinDiam *= scalingFactor;
+        definition.innerCentRad *= scalingFactor;
+        
+    }
+    
+
+
+    return definition;
+}
+
+const CIRCLE_DIAM_BOUNDS =
+{
+            (meter) : [1e-5, 0.1, 500],
+            (centimeter) : 10.0,
+            (millimeter) : 100.0,
+            (inch) : 4
+        } as LengthBoundSpec;
+
+const CYMOD_BOUNDS =
+{
+            (unitless) : [0, .024, 1e5]
+        } as RealBoundSpec;
+
+const INNER_BEARING_BOUNDS =
+{
+            (meter) : [1e-5, 0.015, 500],
+            (centimeter) : 1.5,
+            (millimeter) : 15.0,
+            (inch) : .5
+        } as LengthBoundSpec;
+
+const OUTER_BEARING_BOUNDS =
+{
+            (meter) : [1e-5, 0.025, 500],
+            (centimeter) : 2.5,
+            (millimeter) : 25.0,
+            (inch) : 1
+        } as LengthBoundSpec;
+
+
+
+const BASE_TEETH_BOUNDS =
+{
+            (unitless) : [3, 12, 250]
+        } as IntegerBoundSpec;
+
+const INNER_PIN_COUNT_BOUNDS =
+{
+            (unitless) : [3, 8, 250]
+        } as IntegerBoundSpec;
+
+const INNER_PIN_DIAM_BOUNDS =
+{
+            (meter) : [1e-5, 0.006, 500],
+            (centimeter) : .6,
+            (millimeter) : 6.0,
+            (inch) : 0.25
+        } as LengthBoundSpec;
+
+const INNER_PIN_CENTRAL_RADIUS_BOUNDS =
+{
+            (meter) : [1e-5, 0.03125, 500],
+            (centimeter) : 3.125,
+            (millimeter) : 31.25,
+            (inch) : 1.25
+        } as LengthBoundSpec;
+
+const OUTER_PIN_DIAM_BOUNDS =
+{
+            (meter) : [1e-5, 0.01, 500],
+            (centimeter) : 1,
+            (millimeter) : 10.0,
+            (inch) : 0.4
+        } as LengthBoundSpec;
+
+const ECCENTRICITY_BOUNDS =
+{
+            (meter) : [1e-5, 0.002, 500],
+            (centimeter) : .2,
+            (millimeter) : 2.0,
+            (inch) : 0.075
+        } as LengthBoundSpec;
+
+const SHAFT_BOUNDS =
+{
+            (meter) : [1e-5, 0.01, 500],
+            (centimeter) : 1,
+            (millimeter) : 10.0,
+            (inch) : 0.4
+        } as LengthBoundSpec;
+
+const THICKNESS_BOUNDS =
+{
+            (meter) : [1e-5, 0.01, 500],
+            (centimeter) : 1,
+            (millimeter) : 10.0,
+            (inch) : 0.4
+        } as LengthBoundSpec;
+        
+        const OUT_DISC_THICK_BOUNDS = {
+            (meter) : [1e-5, 0.005, 500],
+            (centimeter) : 1,
+            (millimeter) : 10.0,
+            (inch) : 0.4
+        } as LengthBoundSpec;
