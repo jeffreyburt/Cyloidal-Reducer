@@ -15,6 +15,8 @@ Moving on the posts used to contain the bearings on the primary bearing assembly
 Second to last, the central cycloidal gear is too large when printed at 100% scale. I printed at 98.5% but you might be able to get away with less. Try to decrease it's size as little as possible as it leads to increased backlash.
 Finally, the pins on the output shaft were slightly too large, leading to too much friction. I had to reprint with a smaller size (the change is in the CAD files so you should be fine, just be weary of this if you are designing from scratch).
 
+Update 8/24/2020: I've done a bit more testing and I am less convinced that only the cyucloid size effects the backlash. I think the tolerance in the bearing block also has something to do with it. I will do some more testing and update further. 
+
 Here is the link to the feature script I used:https://forum.onshape.com/discussion/7567/cycloidal-gear-generator
 Once everything is printed I recommend liberally greasing with vaseline/
 
