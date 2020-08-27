@@ -17,6 +17,8 @@ Finally, the pins on the output shaft were slightly too large, leading to too mu
 
 Update 8/24/2020: I've done a bit more testing and I am less convinced that only the cyucloid size effects the backlash. I think the tolerance in the bearing block also has something to do with it. I will do some more testing and update further. 
 
+Update 8/26/2020: After further testing I have concluded that printing the cycloid gear at 100% actually works and probably helps to reduce backlash though I still belive that the bearings contribute as well). A bit more testing is needed as the bearings don't totally work with the new cycloid. 
+
 Here is the link to the feature script I used:https://forum.onshape.com/discussion/7567/cycloidal-gear-generator
 Once everything is printed I recommend liberally greasing with vaseline/
 
