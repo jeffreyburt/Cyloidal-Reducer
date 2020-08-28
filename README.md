@@ -19,6 +19,8 @@ Update 8/24/2020: I've done a bit more testing and I am less convinced that only
 
 Update 8/26/2020: After further testing I have concluded that printing the cycloid gear at 100% actually works and probably helps to reduce backlash though I still belive that the bearings contribute as well). A bit more testing is needed as the bearings don't totally work with the new cycloid. 
 
+Update 8/27/2020: Yeah just print the main cycloid at 10% and make sure your bearing tolerance is correct. Once you have everything working, run the reducer for a while to break it in.
+
 Here is the link to the feature script I used:https://forum.onshape.com/discussion/7567/cycloidal-gear-generator
 Once everything is printed I recommend liberally greasing with vaseline/
 
